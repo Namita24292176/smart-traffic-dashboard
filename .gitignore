@@ -10,3 +10,30 @@ __pycache__/
 *.pyc
 .DS_Store
 app.zip
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Installed packages (like your screenshot)
+*.dist-info/
+boto3/
+botocore/
+requests/
+urllib3/
+s3transfer/
+jmespath/
+dateutil/
+idna/
+certifi/
+charset_normalizer/
+
+# OS files
+.DS_Store
+
+# Logs
+*.log
