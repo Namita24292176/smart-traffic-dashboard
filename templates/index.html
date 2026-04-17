@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Traffic Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:20px}
+h1{color:#38bdf8;font-size:1.4rem;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:18px}
+.card{background:#1e293b;border-radius:10px;padding:18px;border:1px solid #334155}
+.card h2{font-size:0.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.stats{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.stat{background:#0f172a;border-radius:8px;padding:8px 14px;flex:1;min-width:90px}
+.stat .v{font-size:1.5rem;font-weight:600;color:#38bdf8}
+.stat .l{font-size:0.72rem;color:#64748b}
+canvas{max-height:200px}
+.alerts{list-style:none;max-height:170px;overflow-y:auto}
+.alerts li{padding:7px 10px;background:#1e0f0f;border-radius:6px;margin-bottom:5px;font-size:0.8rem;border-left:3px solid #ef4444}
+.ok{border-left-color:#22c55e!important;background:#0f1e0f!important;color:#86efac!important}
+</style>
+</head>
+<body>
+<h1>Smart Traffic — Live Dashboard</h1>
+<div class="grid">
+
+  <div class="card">
+    <h2>Vehicle counter — VC-001</h2>
+    <div class="stats">
+      <div class="stat"><div class="v" id="vc-n">—</div><div class="l">vehicles / interval</div></div>
+      <div class="stat"><div class="v" id="vc-h">—</div><div class="l">heavy vehicles</div></div>
+    </div>
+    <canvas id="cVC"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Speed radar — SR-001</h2>
+    <div class="stats">
+      <div class="stat"><div class="v" id="sr-a">—</div><div class="l">avg km/h</div></div>
+      <div class="stat"><div class="v" id="sr-m">—</div><div class="l">max km/h</div></div>
+      <div class="stat"><div class="v" id="sr-s">—</div><div class="l">speeding</div></div>
+    </div>
+    <canvas id="cSR"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Traffic light — TL-001</h2>
+    <div class="stats">
+      <div class="stat"><div class="v" id="tl-p">—</div><div class="l">phase</div></div>
+      <div class="stat"><div class="v" id="tl-q">—</div><div class="l">queue length</div></div>
+    </div>
+    <canvas id="cTL"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Air quality — AQ-001</h2>
+    <div class="stats">
+      <div class="stat"><div class="v" id="aq-p">—</div><div class="l">PM2.5 μg/m³</div></div>
+      <div class="stat"><div class="v" id="aq-c">—</div><div class="l">CO₂ ppm</div></div>
+      <div class="stat"><div class="v" id="aq-k">—</div><div class="l">AQI</div></div>
+    </div>
+    <canvas id="cAQ"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Pedestrian — PD-001</h2>
+    <div class="stats">
+      <div class="stat"><div class="v" id="pd-n">—</div><div class="l">count</div></div>
+      <div class="stat"><div class="v" id="pd-c">—</div><div class="l">crossing req</div></div>
+    </div>
+    <canvas id="cPD"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Anomaly feed — last 60 min</h2>
+    <ul class="alerts" id="alerts"><li class="ok">Loading...</li></ul>
+  </div>
+
+</div>
+
+<script>
+const mk=(id,label,color)=>new Chart(document.getElementById(id),{
+  type:'line',
+  data:{labels:[],datasets:[{label,data:[],borderColor:color,backgroundColor:color+'18',tension:.3,pointRadius:2,fill:true}]},
+  options:{responsive:true,plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:'#64748b',maxTicksLimit:6},grid:{color:'#1e293b'}},
+            y:{ticks:{color:'#64748b'},grid:{color:'#334155'}}}}
+});
+const C={vc:mk('cVC','Vehicles','#38bdf8'),sr:mk('cSR','Avg speed','#a78bfa'),
+         tl:mk('cTL','Queue','#fb923c'),aq:mk('cAQ','PM2.5','#f87171'),pd:mk('cPD','Pedestrians','#34d399')};
+
+function push(chart, lbl, val, max = 30){
+  const last = chart.data.labels.at(-1);
+  if(last === lbl) return;
+
+  chart.data.labels.push(lbl);
+  chart.data.datasets[0].data.push(val);
+
+  if(chart.data.labels.length > max){
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+  }
+
+  chart.update('none');
+}
+
+const tl=iso=>new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+async function refresh(){
+  try{
+    const t = Date.now(); // ✅ cache-buster
+
+    const [vc,sr,light,aq,pd,anom]=await Promise.all([
+      fetch('/api/sensor/VC-001?_='+t).then(r=>r.json()),
+      fetch('/api/sensor/SR-001?_='+t).then(r=>r.json()),
+      fetch('/api/sensor/TL-001?_='+t).then(r=>r.json()),
+      fetch('/api/sensor/AQ-001?_='+t).then(r=>r.json()),
+      fetch('/api/sensor/PD-001?_='+t).then(r=>r.json()),
+      fetch('/api/anomalies?_='+t).then(r=>r.json()),
+    ]);
+
+    if(vc.readings?.length){
+      const l=vc.readings.at(-1);
+      document.getElementById('vc-n').textContent=l.data.vehicle_count;
+      document.getElementById('vc-h').textContent=l.data.heavy_vehicles;
+      vc.readings.slice(-5).forEach(r=>push(C.vc,tl(r.sk),r.data.vehicle_count));
+    }
+
+    if(sr.readings?.length){
+      const l=sr.readings.at(-1);
+      document.getElementById('sr-a').textContent=l.data.avg_speed_kmh;
+      document.getElementById('sr-m').textContent=l.data.max_speed_kmh;
+      document.getElementById('sr-s').textContent=l.data.speeding_flag?'YES':'no';
+      sr.readings.slice(-5).forEach(r=>push(C.sr,tl(r.sk),r.data.avg_speed_kmh));
+    }
+
+    if(light.readings?.length){
+      const l=light.readings.at(-1);
+      document.getElementById('tl-p').textContent=l.data.phase;
+      document.getElementById('tl-q').textContent=l.data.queue_length;
+      light.readings.slice(-5).forEach(r=>push(C.tl,tl(r.sk),r.data.queue_length));
+    }
+
+    if(aq.readings?.length){
+      const l=aq.readings.at(-1);
+      document.getElementById('aq-p').textContent=l.data.pm25_ugm3;
+      document.getElementById('aq-c').textContent=l.data.co2_ppm;
+      document.getElementById('aq-k').textContent=l.data.aqi_category;
+      aq.readings.slice(-5).forEach(r=>push(C.aq,tl(r.sk),r.data.pm25_ugm3));
+    }
+
+    if(pd.readings?.length){
+      const l=pd.readings.at(-1);
+      document.getElementById('pd-n').textContent=l.data.pedestrian_count;
+      document.getElementById('pd-c').textContent=l.data.crossing_requested?'Yes':'No';
+      pd.readings.slice(-5).forEach(r=>push(C.pd,tl(r.sk),r.data.pedestrian_count));
+    }
+
+    const al=document.getElementById('alerts');
+    if(anom.anomalies?.length){
+      al.innerHTML=anom.anomalies.map(a=>
+        `<li><strong>${a.sensor_id}</strong> — ${a.anomaly} <span style="color:#475569">${tl(a.sk)}</span></li>`
+      ).join('');
+    }else{
+      al.innerHTML='<li class="ok">No anomalies in last 60 minutes</li>';
+    }
+
+  }catch(e){
+    console.error('Refresh error:',e);
+  }
+}
+
+refresh();
+setInterval(refresh, 3000);
+
+</script>
+</body>
+</html>

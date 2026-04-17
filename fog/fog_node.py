@@ -12,7 +12,7 @@ logging.basicConfig(
     format="%(asctime)s [FOG] %(message)s"
 )
 
-# ── CONFIG ───────────────────────────────────────────────
+# ── CONFIG ───
 BROKER_HOST     = os.getenv("BROKER_HOST", "127.0.0.1")
 BROKER_PORT     = int(os.getenv("BROKER_PORT", "1883"))
 FOG_NODE_ID     = os.getenv("FOG_NODE_ID", "FOG-NODE-A")
@@ -27,7 +27,7 @@ CLOUD_API_KEY   = os.getenv(
     "j3jaKPHvif5LXfbpek2XF3tMqRyVVfkK7FRBdHn7"
 )
 
-# ✅ OPTIMIZED SETTINGS
+# OPTIMIZED SETTINGS
 BATCH_SIZE      = 10
 BATCH_TIMEOUT_S = 25.0
 
@@ -86,7 +86,7 @@ def dispatch(batch):
         )
 
         if resp.status_code == 429:
-            logging.warning("🚨 RATE LIMITED → waiting 30 seconds...")
+            logging.warning(" RATE LIMITED → waiting 30 seconds...")
             time.sleep(30)
             return False
 
